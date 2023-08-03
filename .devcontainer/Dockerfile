@@ -32,8 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-noetic-ros-core=1.5.0-1* \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y build-essential
 
-RUN apt-get update && apt-get install -y build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ros-noetic-nodelet ros-noetic-roslint ros-noetic-automotive-platform-msgs \
     ros-noetic-automotive-navigation-msgs ros-noetic-joy
 
