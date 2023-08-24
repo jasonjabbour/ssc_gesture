@@ -68,6 +68,9 @@ private:
 
   void disengage();
   void tryToEngage();
+  // Remove after testing
+  void tryToUnsafelyEngage();
+
 
   // Nodehandles, both public and private
   ros::NodeHandle nh_, pnh_;

@@ -167,7 +167,9 @@ void SscJoystickNl::createEngageCommand(const sensor_msgs::Joy::ConstPtr& msg)
       }
       else
       {
-        tryToEngage();
+        // tryToEngage();
+        // Remove after testing
+        tryToUnsafelyEngage();
       }
       engage_pressed_ = true;
     }
@@ -442,6 +444,18 @@ void SscJoystickNl::tryToEngage()
     engaged_ = true;
   }
 }
+
+
+// Remove this function after testing
+void SscJoystickNl::tryToUnsafelyEngage()
+{
+  NODELET_INFO("Engaged");
+  desired_velocity_ = 0.0;
+  desired_curvature_ = 0.0;
+  desired_gear_ = current_gear_;
+  engaged_ = true;
+}
+
 
 void SscJoystickNl::moduleStateCallback(const automotive_navigation_msgs::ModuleState::ConstPtr& msg)
 {

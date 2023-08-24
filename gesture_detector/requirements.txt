@@ -1,0 +1,4 @@
+scikit-build
+opencv-python==4.5.3.56
+mediapipe
+tensorflow
