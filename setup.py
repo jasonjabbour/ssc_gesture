@@ -6,7 +6,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'scikit-build',
-        'opencv-python==4.5.3.56',
+        'opencv-python',
         'mediapipe',
         'tensorflow'
     ],

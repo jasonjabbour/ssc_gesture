@@ -94,6 +94,9 @@ software modules and can be used as a starting point for the development of high
 
 ```sh
 
+# Outside of docker to allow docker to access host's X server
+xhost local:root
+
 # Make the Workspace
 cd /tmp/photondrive_ws
 catkin_make
