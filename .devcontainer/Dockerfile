@@ -68,7 +68,9 @@ RUN apt-get install -y python3-pip && \
     pip3 install scikit-build && \
     pip3 install opencv-python && \ 
     pip3 install mediapipe && \
-    pip3 install tensorflow
+    pip3 install tensorflow && \
+    pip3 install PyYAML && \ 
+    pip3 install rospkg
 
 # Source ROS setup.bash in the bashrc file for the user
 RUN echo "source /opt/ros/melodic/setup.bash" >> /root/.bashrc

@@ -20,6 +20,13 @@
   <depend>automotive_platform_msgs</depend>
   <depend>automotive_navigation_msgs</depend>
   <depend>joy</depend>
+  <depend>rospy</depend>
+  <depend>message_generation</depend>
+  <depend>message_runtime</depend>  <!-- This will act as both build and run depend -->
+
+  <build_depend>roslint</build_depend>
+
+
 
   <export>
     <nodelet plugin="${prefix}/nodelets.xml"/>

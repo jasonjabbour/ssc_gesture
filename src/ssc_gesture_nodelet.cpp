@@ -18,7 +18,7 @@
  * MAY DESCRIBE, IN WHOLE OR IN PART.
  */
 
-#include "ssc_joystick/ssc_joystick_nodelet.hpp"
+#include "ssc_joystick/ssc_gesture_nodelet.hpp"
 
 #include <algorithm>
 #include <math.h>
@@ -51,7 +51,7 @@ T clamp(const T value, T bound1, T bound2)
 }
 }  // namespace
 
-void SscJoystickNl::onInit()
+void SscGestureNl::onInit()
 {
   nh_ = getNodeHandle();
   pnh_ = getPrivateNodeHandle();
@@ -75,12 +75,15 @@ void SscJoystickNl::onInit()
   last_joystick_msg_timestamp_ = ros::Time::now().toSec() + 5.0;
 
   // Subscribers
-  joy_sub_ = nh_.subscribe("joy", 10, &SscJoystickNl::joystickCallback, this);
-  joy_fault_sub_ = nh_.subscribe("diagnostics", 10, &SscJoystickNl::diagnosticCallback, this);
-  gear_sub_ = nh_.subscribe("gear_feedback", 10, &SscJoystickNl::gearFeedbackCallback, this);
-  velocity_sub_ = nh_.subscribe("velocity_accel_cov", 10, &SscJoystickNl::velocityCallback, this);
-  adas_input_sub_ = nh_.subscribe("adas_input", 10, &SscJoystickNl::inputAdasCallback, this);
-  module_state_sub_ = nh_.subscribe("module_states", 10, &SscJoystickNl::moduleStateCallback, this);
+  joy_sub_ = nh_.subscribe("joy", 10, &SscGestureNl::joystickCallback, this);
+  joy_fault_sub_ = nh_.subscribe("diagnostics", 10, &SscGestureNl::diagnosticCallback, this);
+  gear_sub_ = nh_.subscribe("gear_feedback", 10, &SscGestureNl::gearFeedbackCallback, this);
+  velocity_sub_ = nh_.subscribe("velocity_accel_cov", 10, &SscGestureNl::velocityCallback, this);
+  adas_input_sub_ = nh_.subscribe("adas_input", 10, &SscGestureNl::inputAdasCallback, this);
+  module_state_sub_ = nh_.subscribe("module_states", 10, &SscGestureNl::moduleStateCallback, this);
+
+  // NEW
+  gesture_topic_sub_ = nh_.subscribe("gesture_topic", 10, &SscGestureNl::gestureClassCallback, this);
 
   // Publishers
   gear_cmd_pub_ = nh_.advertise<automotive_platform_msgs::GearCommand>("gear_select", 1);
@@ -89,11 +92,11 @@ void SscJoystickNl::onInit()
   steer_cmd_pub_ = nh_.advertise<automotive_platform_msgs::SteerMode>("arbitrated_steering_commands", 1);
 
   // Vehicle command timer
-  vehicle_cmd_timer_ = nh_.createTimer(ros::Duration(publish_interval_), &SscJoystickNl::publishVehicleCommand, this);
+  vehicle_cmd_timer_ = nh_.createTimer(ros::Duration(publish_interval_), &SscGestureNl::publishVehicleCommand, this);
   NODELET_INFO("ssc_joystick initialized");
 }
 
-void SscJoystickNl::loadParams()
+void SscGestureNl::loadParams()
 {
   pnh_.param("publish_interval", publish_interval_, 0.05f);
   pnh_.param("joystick_fault_timeout", joystick_fault_timeout_, 3.0f);
@@ -137,15 +140,16 @@ void SscJoystickNl::loadParams()
   NODELET_INFO("Parameters Loaded");
 }
 
-void SscJoystickNl::joystickCallback(const sensor_msgs::Joy::ConstPtr& msg)
+void SscGestureNl::joystickCallback(const sensor_msgs::Joy::ConstPtr& msg)
 {
+
   createEngageCommand(msg);
 
   if (engaged_)
   {
     createShiftCommand(msg);
-    createSpeedCommand(msg);
-    createSteeringCommand(msg);
+    // createSpeedCommand(msg);
+    // createSteeringCommand(msg);
     createAuxCommand(msg);
   }
   else
@@ -155,19 +159,43 @@ void SscJoystickNl::joystickCallback(const sensor_msgs::Joy::ConstPtr& msg)
   }
 }
 
-void SscJoystickNl::createEngageCommand(const sensor_msgs::Joy::ConstPtr& msg)
+// NEW
+void SscGestureNl::gestureClassCallback(const ssc_joystick::Gesture::ConstPtr& msg)
+{
+  // createEngageCommand(msg);
+
+  if (engaged_)
+  {
+    // createSpeedCommand(msg);
+    // createSteeringCommand(msg);
+    createSpeedandSteeringGesture(msg);
+  }
+  else
+  {
+    desired_velocity_ = 0.0;
+    desired_curvature_ = 0.0;
+  }
+
+}
+
+
+void SscGestureNl::createEngageCommand(const sensor_msgs::Joy::ConstPtr& msg)
 {
   if ((msg->buttons.at((uint32_t)engage1_button_) > 0) && (msg->buttons.at((uint32_t)engage2_button_) > 0))
   {
+
     if (!engage_pressed_)
     {
+
       if (engaged_)
       {
         disengage();
       }
       else
       {
-        tryToEngage();
+        // tryToEngage();
+        // Remove after testing
+        tryToUnsafelyEngage();
       }
       engage_pressed_ = true;
     }
@@ -186,7 +214,7 @@ void SscJoystickNl::createEngageCommand(const sensor_msgs::Joy::ConstPtr& msg)
   }
 }
 
-void SscJoystickNl::createShiftCommand(const sensor_msgs::Joy::ConstPtr& msg)
+void SscGestureNl::createShiftCommand(const sensor_msgs::Joy::ConstPtr& msg)
 {
   if (msg->buttons.at((uint32_t)park_button_) > 0)
   {
@@ -197,23 +225,27 @@ void SscJoystickNl::createShiftCommand(const sensor_msgs::Joy::ConstPtr& msg)
     else
     {
       desired_gear_ = automotive_platform_msgs::Gear::PARK;
+      NODELET_INFO("Vehicle Gear in: Park");
     }
   }
   else if (msg->buttons.at((uint32_t)neutral_button_) > 0)
   {
     desired_gear_ = automotive_platform_msgs::Gear::NEUTRAL;
+    NODELET_INFO("Vehicle Gear in: Neutral");
   }
   else if (msg->buttons.at((uint32_t)drive_button_) > 0)
   {
     desired_gear_ = automotive_platform_msgs::Gear::DRIVE;
+    NODELET_INFO("Vehicle Gear in: Drive");
   }
   else if (msg->buttons.at((uint32_t)reverse_button_) > 0)
   {
     desired_gear_ = automotive_platform_msgs::Gear::REVERSE;
+    NODELET_INFO("Vehicle Gear in: Reverse");
   }
 }
 
-void SscJoystickNl::createSpeedCommand(const sensor_msgs::Joy::ConstPtr& msg)
+void SscGestureNl::createSpeedCommand(const sensor_msgs::Joy::ConstPtr& msg)
 {
   float speed = msg->axes.at((uint32_t)speed_axes_);
   bool speed_updated = false;
@@ -307,57 +339,179 @@ void SscJoystickNl::createSpeedCommand(const sensor_msgs::Joy::ConstPtr& msg)
   }
 }
 
-void SscJoystickNl::createSteeringCommand(const sensor_msgs::Joy::ConstPtr& msg)
+void SscGestureNl::createSteeringCommand(const sensor_msgs::Joy::ConstPtr& msg)
 {
+  // Extract steering value from the joystick message based on the specified steering axes
   float steering = msg->axes.at((uint32_t)steering_axes_);
+
+  // Check if the absolute value of the steering is significant enough to be considered
   if ((steering > 0.01) || (steering < -0.01))
   {
+    // Adjust the raw steering value using the steering sign
     float raw = steering * steering_sign_;
+
+    // Calculate desired curvature based on the transformed steering value
+    // The value is raised to the power of steering_exponent_, which allows for exponential steering responses
     desired_curvature_ = std::copysign(std::pow(std::fabs(raw), steering_exponent_) * max_curvature_, raw);
+
+    // Mark that steering is currently active
     steering_active_ = true;
   }
+  // If the steering is neutral but was previously active
   else if (steering_active_)
   {
+    // Reset desired curvature to zero
     desired_curvature_ = 0.0;
+
+    // Mark that steering is no longer active
     steering_active_ = false;
   }
+  // Handle the case where steering is not significant and it was not previously active
   else
   {
+    // Extract steering value from joystick message based on the specified button axes for steering
     float steer = msg->axes.at((uint32_t)steer_btn_axes_);
+
+    // Initialize a flag to track if steering has been modified
     bool steer_updated = false;
+
+    // Check if the steer value indicates a positive (rightward) turn
     if (steer > 0.1)
     {
+      // Ensure the previous steering command wasn't already turning right
       if (steer_last_ != 1)
       {
+        // Increase desired curvature by a fixed step
         desired_curvature_ += steer_btn_sign_ * steer_btn_step_;
+
+        // Mark that steering has been updated
         steer_updated = true;
       }
+      // Record the last steering direction as rightward
       steer_last_ = 1;
     }
+    // Check if the steer value indicates a negative (leftward) turn
     else if (steer < -0.1)
     {
+      // Ensure the previous steering command wasn't already turning left
       if (steer_last_ != -1)
       {
+        // Decrease desired curvature by a fixed step
         desired_curvature_ -= steer_btn_sign_ * steer_btn_step_;
+
+        // Mark that steering has been updated
         steer_updated = true;
       }
+      // Record the last steering direction as leftward
       steer_last_ = -1;
     }
+    // If the steer value is neutral
     else
     {
+      // Record the last steering direction as neutral
       steer_last_ = 0;
     }
 
+    // If steering was updated during this cycle
     if (steer_updated)
     {
+      // Round desired curvature to the nearest multiple of steer_btn_step_
       desired_curvature_ = static_cast<float>(steer_btn_step_ * round(desired_curvature_ / steer_btn_step_));
+
+      // Clamp the desired curvature within the limits of maximum curvature
       desired_curvature_ = clamp(desired_curvature_, -max_curvature_, max_curvature_);
+
+      // Log the updated desired curvature value
       NODELET_INFO("Desired Curvature: %f", desired_curvature_);
     }
   }
 }
 
-void SscJoystickNl::createAuxCommand(const sensor_msgs::Joy::ConstPtr& msg)
+void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::ConstPtr& msg)
+{
+  // Get the classification made by the gesture detector
+  current_gesture_class_ = msg->classification;
+  NODELET_INFO("RECEIVED CLASSIFICATION: %d", current_gesture_class_);
+
+  // Constant Speed
+  const float DEFAULT_SPEED = 1; 
+  
+  // Initialize flags for speed and steering updates
+  bool speed_updated = false;
+  bool steering_updated = false;
+
+  // FSM based on gesture classification
+  switch(current_gesture_class_)
+  {
+    case 0: // Default: No change
+      desired_velocity_ = 0.0;
+      speed_updated = true;
+      break;
+
+    case 1: // Turn Left
+      desired_curvature_ -= steer_btn_step_; // Decrease curvature to turn left
+      steering_updated = true;
+      break;
+
+    case 2: // Turn Right
+      desired_curvature_ += steer_btn_step_; // Increase curvature to turn right
+      steering_updated = true;
+      break;
+
+    case 3: // Move Forward
+      desired_velocity_ = DEFAULT_SPEED;
+      speed_updated = true;
+      break;
+
+    case 4: // Stop
+      desired_velocity_ = 0.0;
+      speed_updated = true;
+      break;
+
+    case 5: // Slow Down
+      // Assuming we're slowing down by a fixed amount (like speed_step_)
+      desired_velocity_ -= speed_step_;
+      if(desired_velocity_ < 0.0) // Ensure we don't go negative
+      {
+        desired_velocity_ = 0.0;
+      }
+      speed_updated = true;
+      break;
+
+    default: // For other classifications, no change
+      break;
+  }
+
+  // Handle speed updates
+  if(speed_updated)
+  {
+    // Ensure desired velocity is within limits
+    if (desired_velocity_ > max_speed_)
+    {
+      desired_velocity_ = max_speed_;
+    }
+    else if (desired_velocity_ < 0.1)
+    {
+      desired_velocity_ = 0.0;
+    }
+
+    // Log the updated desired velocity
+    NODELET_INFO("Desired velocity: %f", desired_velocity_);
+  }
+
+  // Handle steering updates
+  if(steering_updated)
+  {
+    // Clamp the desired curvature within the limits of maximum curvature
+    desired_curvature_ = clamp(desired_curvature_, -max_curvature_, max_curvature_);
+
+    // Log the updated desired curvature value
+    NODELET_INFO("Desired Curvature: %f", desired_curvature_);
+  }
+}
+
+
+void SscGestureNl::createAuxCommand(const sensor_msgs::Joy::ConstPtr& msg)
 {
   if (msg->buttons.at((uint32_t)right_turn_button_) > 0)
   {
@@ -373,7 +527,7 @@ void SscJoystickNl::createAuxCommand(const sensor_msgs::Joy::ConstPtr& msg)
   }
 }
 
-void SscJoystickNl::diagnosticCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& msg)
+void SscGestureNl::diagnosticCallback(const diagnostic_msgs::DiagnosticArray::ConstPtr& msg)
 {
   for (auto it = msg->status.begin(); it < msg->status.end(); it++)
   {
@@ -391,17 +545,17 @@ void SscJoystickNl::diagnosticCallback(const diagnostic_msgs::DiagnosticArray::C
   }
 }
 
-void SscJoystickNl::gearFeedbackCallback(const automotive_platform_msgs::GearFeedback::ConstPtr& msg)
+void SscGestureNl::gearFeedbackCallback(const automotive_platform_msgs::GearFeedback::ConstPtr& msg)
 {
   current_gear_ = msg->current_gear.gear;
 }
 
-void SscJoystickNl::velocityCallback(const automotive_platform_msgs::VelocityAccelCov::ConstPtr& msg)
+void SscGestureNl::velocityCallback(const automotive_platform_msgs::VelocityAccelCov::ConstPtr& msg)
 {
   current_velocity_ = msg->velocity;
 }
 
-void SscJoystickNl::inputAdasCallback(const automotive_platform_msgs::UserInputADAS::ConstPtr& msg)
+void SscGestureNl::inputAdasCallback(const automotive_platform_msgs::UserInputADAS::ConstPtr& msg)
 {
   if (msg->btn_cc_set_inc && msg->btn_acc_gap_inc)
   {
@@ -412,17 +566,19 @@ void SscJoystickNl::inputAdasCallback(const automotive_platform_msgs::UserInputA
   }
   else if (msg->btn_cc_set_dec && msg->btn_acc_gap_dec)
   {
-    tryToEngage();
+    // tryToEngage();
+    // NEW
+    // tryToUnsafelyEngage();
   }
 }
 
-void SscJoystickNl::disengage()
+void SscGestureNl::disengage()
 {
   NODELET_INFO("Disengaged");
   engaged_ = false;
 }
 
-void SscJoystickNl::tryToEngage()
+void SscGestureNl::tryToEngage()
 {
   if (!dbw_ok_)
   {
@@ -443,7 +599,19 @@ void SscJoystickNl::tryToEngage()
   }
 }
 
-void SscJoystickNl::moduleStateCallback(const automotive_navigation_msgs::ModuleState::ConstPtr& msg)
+
+// Remove this function after testing
+void SscGestureNl::tryToUnsafelyEngage()
+{
+  NODELET_INFO("Engaged");
+  desired_velocity_ = 0.0;
+  desired_curvature_ = 0.0;
+  desired_gear_ = current_gear_;
+  engaged_ = true;
+}
+
+
+void SscGestureNl::moduleStateCallback(const automotive_navigation_msgs::ModuleState::ConstPtr& msg)
 {
   if (msg->name == veh_controller_name_)
   {
@@ -477,7 +645,7 @@ void SscJoystickNl::moduleStateCallback(const automotive_navigation_msgs::Module
   }
 }
 
-void SscJoystickNl::publishVehicleCommand(const ros::TimerEvent& event)
+void SscGestureNl::publishVehicleCommand(const ros::TimerEvent& event)
 {
   (void)event;
 
@@ -524,4 +692,4 @@ void SscJoystickNl::publishVehicleCommand(const ros::TimerEvent& event)
 }
 }  // namespace astuff
 
-PLUGINLIB_EXPORT_CLASS(astuff::SscJoystickNl, nodelet::Nodelet);
+PLUGINLIB_EXPORT_CLASS(astuff::SscGestureNl, nodelet::Nodelet);

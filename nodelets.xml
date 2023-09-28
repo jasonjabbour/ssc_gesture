@@ -7,3 +7,13 @@
     </description>
   </class>
 </library>
+
+<library path="lib/libssc_gesture_nodelet">
+  <class name="ssc_joystick/ssc_gesture_nodelet"
+         type="astuff::SscGestureNl"
+         base_class_type="nodelet::Nodelet">
+    <description>
+      SSC Gesture Demo
+    </description>
+  </class>
+</library>

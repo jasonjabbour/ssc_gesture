@@ -18,8 +18,8 @@
  * MAY DESCRIBE, IN WHOLE OR IN PART.
  */
 
-#ifndef SSC_JOYSTICK_H
-#define SSC_JOYSTICK_H
+#ifndef SSC_GESTURE_H
+#define SSC_GESTURE_H
 
 #include <string>
 
@@ -36,14 +36,15 @@
 #include <automotive_platform_msgs/SteerMode.h>
 #include <automotive_platform_msgs/VelocityAccelCov.h>
 #include <automotive_navigation_msgs/ModuleState.h>
+#include <ssc_joystick/Gesture.h>
 
 namespace astuff
 {
-class SscJoystickNl : public nodelet::Nodelet
+class SscGestureNl : public nodelet::Nodelet
 {
 public:
-  SscJoystickNl() = default;
-  virtual ~SscJoystickNl() = default;
+  SscGestureNl() = default;
+  virtual ~SscGestureNl() = default;
 
 private:
   // Init
@@ -62,12 +63,17 @@ private:
   void gearFeedbackCallback(const automotive_platform_msgs::GearFeedback::ConstPtr& msg);
   void velocityCallback(const automotive_platform_msgs::VelocityAccelCov::ConstPtr& msg);
   void inputAdasCallback(const automotive_platform_msgs::UserInputADAS::ConstPtr& msg);
+  void gestureClassCallback(const ssc_joystick::Gesture::ConstPtr& msg);
+  void createSpeedandSteeringGesture(const ssc_joystick::Gesture::ConstPtr& msg);
 
   // Publish vehicle command
   void publishVehicleCommand(const ros::TimerEvent& event);
 
   void disengage();
   void tryToEngage();
+  // Remove after testing
+  void tryToUnsafelyEngage();
+
 
   // Nodehandles, both public and private
   ros::NodeHandle nh_, pnh_;
@@ -86,6 +92,7 @@ private:
   ros::Subscriber gear_sub_;
   ros::Subscriber velocity_sub_;
   ros::Subscriber adas_input_sub_;
+  ros::Subscriber gesture_topic_sub_;
 
   // Timers
   ros::Timer vehicle_cmd_timer_;
@@ -152,7 +159,9 @@ private:
   float desired_curvature_ = 0.0;
   uint8_t desired_gear_ = automotive_platform_msgs::Gear::NONE;
   uint8_t desired_turn_signal_ = automotive_platform_msgs::TurnSignalCommand::NONE;
+
+  int32_t current_gesture_class_ = 0;
 };
 
 }  // namespace astuff
-#endif  // SSC_JOYSTICK_H
+#endif  // SSC_GESTURE_H

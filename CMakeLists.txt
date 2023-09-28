@@ -12,20 +12,35 @@ find_package(catkin REQUIRED COMPONENTS
   automotive_platform_msgs
   automotive_navigation_msgs
   joy
+  rospy
+  message_generation
+  message_runtime
+)
+
+## Add message files
+add_message_files(
+  FILES
+  Gesture.msg
+)
+
+## Generate added messages and services
+generate_messages(
+  DEPENDENCIES
+  std_msgs
 )
 
 ## Declare a catkin package
-catkin_package(CATKIN_DEPENDS
-    INCLUDE_DIRS include
-    CATKIN_DEPENDS ${catkin_deps}
-    LIBRARIES ${PROJECT_NAME}_nodelet
+catkin_package(
+  INCLUDE_DIRS include
+  CATKIN_DEPENDS roscpp nodelet std_msgs automotive_platform_msgs automotive_navigation_msgs joy rospy message_runtime
+  LIBRARIES ${PROJECT_NAME}_nodelet
 )
 
 ###########
 ## Build ##
 ###########
 
-## Build executables
+## Specify additional locations of header files
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
@@ -49,6 +64,24 @@ target_link_libraries(${PROJECT_NAME}_node
     ${catkin_LIBRARIES}
 )
 
+# nodelet for ssc_gesture
+add_library(ssc_gesture_nodelet
+    src/ssc_gesture_nodelet.cpp
+)
+
+target_link_libraries(ssc_gesture_nodelet
+    ${catkin_LIBRARIES}
+)
+
+# node for ssc_gesture
+add_executable(ssc_gesture_node
+    src/ssc_gesture_node.cpp
+)
+
+target_link_libraries(ssc_gesture_node
+    ${catkin_LIBRARIES}
+)
+
 roslint_cpp()
 
 #############
@@ -57,7 +90,9 @@ roslint_cpp()
 
 install(TARGETS
     ${PROJECT_NAME}_node
+    ssc_gesture_node
     ${PROJECT_NAME}_nodelet
+    ssc_gesture_nodelet
     ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
     RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -74,3 +109,4 @@ install(FILES nodelets.xml
 install(DIRECTORY include/${PROJECT_NAME}/
     DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
+

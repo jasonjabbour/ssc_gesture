@@ -1,1 +1,1 @@
-from utils.cvfpscalc import CvFpsCalc
+from gesture_detector.utils.cvfpscalc import CvFpsCalc

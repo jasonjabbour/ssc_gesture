@@ -104,11 +104,20 @@ catkin_make
 # Source the overlay
 source devel/setup.bash
 
-# Launch 
-roslaunch ssc_joystick ssc_joystick.launch
-
+# Install package dependencies
 cd /tmp/photondrive_ws/src/ssc_gesture
 pip3 install -e .
+
+# Launch Gesture Recognition Alone
+roslaunch ssc_joystick gesture_detection.launch
+
+# Launch Joystick Alone
+roslaunch ssc_joystick ssc_joystick.launch
+
+# Launch Gesture and SSC Controller
+roslaunch ssc_joystick ssc_gesture.launch
+
+
 ```
 
 ## Info
