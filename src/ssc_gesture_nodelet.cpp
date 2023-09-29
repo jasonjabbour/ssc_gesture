@@ -178,6 +178,7 @@ void SscGestureNl::gestureClassCallback(const ssc_joystick::Gesture::ConstPtr& m
   if (engaged_)
   {
     createSpeedandSteeringGesture(msg);
+    // float x = 0;
   }
   else
   {
@@ -491,7 +492,7 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
 {
 
   // Constant Speed
-  const float DEFAULT_SPEED = 1; 
+  const float DEFAULT_SPEED = 3; 
   // Initialize flags for speed and steering updates
   bool speed_updated = false;
   bool steering_updated = false;
@@ -576,7 +577,7 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
   if(steering_updated)
   {
     // Clamp the desired curvature within the limits of maximum curvature
-    desired_curvature_ = clamp(desired_curvature_, -max_curvature_, max_curvature_);
+    desired_curvature_ = clamp(desired_curvature_, -max_curvature_/10, max_curvature_/10);
 
     // Log the updated desired curvature value
     NODELET_INFO("Desired Curvature: %f", desired_curvature_);
@@ -737,6 +738,7 @@ void SscGestureNl::publishVehicleCommand(const ros::TimerEvent& event)
     }
   }
 
+  // NODELET_INFO("Desired Speed %f", desired_velocity_);
   automotive_platform_msgs::SpeedMode speed_cmd_msg;
   speed_cmd_msg.header.stamp = current_time;
   speed_cmd_msg.mode = engage_speed_module_ ? engaged_ : false;

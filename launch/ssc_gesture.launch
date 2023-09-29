@@ -17,8 +17,8 @@
     </node>
 
     <!-- Gesture detection node -->
-    <!-- <node pkg="ssc_joystick" type="gesture_detector_node.py" name="gesture_detection_node" output="screen">
-    </node>  -->
+    <node pkg="ssc_joystick" type="gesture_detector_node.py" name="gesture_detection_node" output="screen">
+    </node> 
 
   </group>
 </launch>

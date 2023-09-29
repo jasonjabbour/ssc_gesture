@@ -96,10 +96,10 @@ private:
   ros::Subscriber gesture_topic_sub_;
 
   // Safety
-  bool training_wheels_mode = true; 
+  bool training_wheels_mode = false; 
 
   // Testing: When you don't have access to pacmod system, webcam, joystick
-  bool testing_mode_ = true;
+  bool testing_mode_ = false;
 
   // Timers
   ros::Timer vehicle_cmd_timer_;
