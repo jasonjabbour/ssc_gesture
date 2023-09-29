@@ -22,6 +22,7 @@
 #define SSC_GESTURE_H
 
 #include <string>
+#include <deque>
 
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
@@ -71,9 +72,9 @@ private:
 
   void disengage();
   void tryToEngage();
-  // Remove after testing
   void tryToUnsafelyEngage();
 
+  int getGestureVote();
 
   // Nodehandles, both public and private
   ros::NodeHandle nh_, pnh_;
@@ -93,6 +94,12 @@ private:
   ros::Subscriber velocity_sub_;
   ros::Subscriber adas_input_sub_;
   ros::Subscriber gesture_topic_sub_;
+
+  // Safety
+  bool training_wheels_mode = true; 
+
+  // Testing: When you don't have access to pacmod system, webcam, joystick
+  bool testing_mode_ = true;
 
   // Timers
   ros::Timer vehicle_cmd_timer_;
@@ -160,7 +167,11 @@ private:
   uint8_t desired_gear_ = automotive_platform_msgs::Gear::NONE;
   uint8_t desired_turn_signal_ = automotive_platform_msgs::TurnSignalCommand::NONE;
 
+  // Gesture Detector
   int32_t current_gesture_class_ = 0;
+  const size_t GESTURE_HISTORY_SIZE = 20; // Example size
+  std::deque<int> gesture_history_;
+
 };
 
 }  // namespace astuff

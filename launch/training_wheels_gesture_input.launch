@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="namespace" default="ssc" />
+
+  <remap from="/diagnostics" to="/$(arg namespace)/diagnostics" />
+
+  <group ns="$(arg namespace)">
+   
+    <node pkg="ssc_joystick" type="training_wheels_gesture_input_node.py" name="gesture_detection_node" output="screen">
+    </node> 
+
+  </group>
+</launch>

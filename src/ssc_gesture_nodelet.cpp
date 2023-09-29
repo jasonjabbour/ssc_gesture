@@ -82,9 +82,13 @@ void SscGestureNl::onInit()
   adas_input_sub_ = nh_.subscribe("adas_input", 10, &SscGestureNl::inputAdasCallback, this);
   module_state_sub_ = nh_.subscribe("module_states", 10, &SscGestureNl::moduleStateCallback, this);
 
-  // NEW
-  gesture_topic_sub_ = nh_.subscribe("gesture_topic", 10, &SscGestureNl::gestureClassCallback, this);
-
+  if (training_wheels_mode){
+    gesture_topic_sub_ = nh_.subscribe("training_wheels_gesture_topic", 10, &SscGestureNl::gestureClassCallback, this);
+  }
+  else {
+    gesture_topic_sub_ = nh_.subscribe("gesture_topic", 10, &SscGestureNl::gestureClassCallback, this);
+  }
+  
   // Publishers
   gear_cmd_pub_ = nh_.advertise<automotive_platform_msgs::GearCommand>("gear_select", 1);
   turn_signal_cmd_pub_ = nh_.advertise<automotive_platform_msgs::TurnSignalCommand>("turn_signal_command", 1);
@@ -145,6 +149,10 @@ void SscGestureNl::joystickCallback(const sensor_msgs::Joy::ConstPtr& msg)
 
   createEngageCommand(msg);
 
+  if (testing_mode_){
+    engaged_ = true; 
+  }
+
   if (engaged_)
   {
     createShiftCommand(msg);
@@ -162,12 +170,13 @@ void SscGestureNl::joystickCallback(const sensor_msgs::Joy::ConstPtr& msg)
 // NEW
 void SscGestureNl::gestureClassCallback(const ssc_joystick::Gesture::ConstPtr& msg)
 {
-  // createEngageCommand(msg);
+
+  if (testing_mode_){
+    engaged_ = true; 
+  }
 
   if (engaged_)
   {
-    // createSpeedCommand(msg);
-    // createSteeringCommand(msg);
     createSpeedandSteeringGesture(msg);
   }
   else
@@ -193,9 +202,15 @@ void SscGestureNl::createEngageCommand(const sensor_msgs::Joy::ConstPtr& msg)
       }
       else
       {
-        // tryToEngage();
-        // Remove after testing
-        tryToUnsafelyEngage();
+        
+        if (testing_mode_){
+          tryToUnsafelyEngage();
+        }
+        else
+        {
+          tryToEngage();
+        }
+
       }
       engage_pressed_ = true;
     }
@@ -427,21 +442,75 @@ void SscGestureNl::createSteeringCommand(const sensor_msgs::Joy::ConstPtr& msg)
   }
 }
 
+
+int SscGestureNl::getGestureVote()
+{
+    // Sliding window over a history of gestures to vote on the majority classification
+
+    // Calculate the threshold for a clear majority as 75% of the history size
+    int majority_threshold = static_cast<int>(0.75 * GESTURE_HISTORY_SIZE);
+
+    // Create a map to count the occurrences of each classification in the history
+    std::map<int, int> count;
+
+    // Iterate over the gesture history
+    for (int classification : gesture_history_)
+    {
+        // Increment the count of the current classification
+        count[classification]++;
+    }
+
+    // Initialize variables to track the most frequent classification (mode) and its count
+    int max_count = -1;
+    int mode = -1;
+
+    // Iterate over the counts
+    for (const auto &entry : count)
+    {
+        // Check if the current classification's count is greater than the highest count found so far
+        if (entry.second > max_count)
+        {
+            // Update the highest count and the mode
+            max_count = entry.second;
+            mode = entry.first;
+        }
+    }
+
+    // If no classification has a clear majority, default to 0
+    if (max_count < majority_threshold)
+    {
+        return 0;
+    }
+
+    // Return the classification with the highest count
+    return mode;
+}
+
+
 void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::ConstPtr& msg)
 {
-  // Get the classification made by the gesture detector
-  current_gesture_class_ = msg->classification;
-  NODELET_INFO("RECEIVED CLASSIFICATION: %d", current_gesture_class_);
 
   // Constant Speed
   const float DEFAULT_SPEED = 1; 
-  
   // Initialize flags for speed and steering updates
   bool speed_updated = false;
   bool steering_updated = false;
 
+  // If adding a new classification would exceed the history size, pop the oldest
+  if (gesture_history_.size() >= GESTURE_HISTORY_SIZE)
+  {
+      gesture_history_.pop_front();
+  }
+
+  // Add new classification to history
+  gesture_history_.push_back(msg->classification);
+
+  // Use the mode from the last 20 classifications
+  int consensus_classification = getGestureVote();
+  NODELET_INFO("RECEIVED LABEL: %s, CLASSIFICATION: %d, CONSENSUS CLASSIFICATION: %d", msg->label.c_str(), msg->classification, consensus_classification);
+
   // FSM based on gesture classification
-  switch(current_gesture_class_)
+  switch(consensus_classification)
   {
     case 0: // Default: No change
       desired_velocity_ = 0.0;
@@ -451,11 +520,15 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
     case 1: // Turn Left
       desired_curvature_ -= steer_btn_step_; // Decrease curvature to turn left
       steering_updated = true;
+      desired_velocity_ = DEFAULT_SPEED;
+      speed_updated = true;
       break;
 
     case 2: // Turn Right
       desired_curvature_ += steer_btn_step_; // Increase curvature to turn right
       steering_updated = true;
+      desired_velocity_ = DEFAULT_SPEED;
+      speed_updated = true;
       break;
 
     case 3: // Move Forward
@@ -531,15 +604,17 @@ void SscGestureNl::diagnosticCallback(const diagnostic_msgs::DiagnosticArray::Co
 {
   for (auto it = msg->status.begin(); it < msg->status.end(); it++)
   {
-    if (it->name.find("Joystick Driver Status") != std::string::npos)
-    {
-      last_joystick_msg_timestamp_ = msg->header.stamp.toSec();
-      if (it->level != diagnostic_msgs::DiagnosticStatus::OK)
+    if (!testing_mode_){
+      if (it->name.find("Joystick Driver Status") != std::string::npos)
       {
-        NODELET_WARN("JOYSTICK FAULT");
-        engaged_ = 0;
-        brake_initialized_ = false;
-        brake_active_ = false;
+        last_joystick_msg_timestamp_ = msg->header.stamp.toSec();
+        if (it->level != diagnostic_msgs::DiagnosticStatus::OK)
+        {
+          NODELET_WARN("JOYSTICK FAULT");
+          engaged_ = 0;
+          brake_initialized_ = false;
+          brake_active_ = false;
+        }
       }
     }
   }
@@ -566,9 +641,12 @@ void SscGestureNl::inputAdasCallback(const automotive_platform_msgs::UserInputAD
   }
   else if (msg->btn_cc_set_dec && msg->btn_acc_gap_dec)
   {
-    // tryToEngage();
-    // NEW
-    // tryToUnsafelyEngage();
+    if (testing_mode_){
+      tryToUnsafelyEngage();
+    }
+    else{
+      tryToEngage();
+    }  
   }
 }
 
@@ -599,8 +677,6 @@ void SscGestureNl::tryToEngage()
   }
 }
 
-
-// Remove this function after testing
 void SscGestureNl::tryToUnsafelyEngage()
 {
   NODELET_INFO("Engaged");
@@ -650,12 +726,15 @@ void SscGestureNl::publishVehicleCommand(const ros::TimerEvent& event)
   (void)event;
 
   ros::Time current_time = ros::Time::now();
-  if (current_time.toSec() - last_joystick_msg_timestamp_ > joystick_fault_timeout_)
-  {
-    // Joystick has timed out
-    NODELET_WARN("JOYSTICK TIMEOUT");
-    last_joystick_msg_timestamp_ = current_time.toSec();
-    engaged_ = 0;
+  // removed for testing 
+  if (!testing_mode_){
+    if (current_time.toSec() - last_joystick_msg_timestamp_ > joystick_fault_timeout_)
+    {
+      // Joystick has timed out
+      NODELET_WARN("JOYSTICK TIMEOUT");
+      last_joystick_msg_timestamp_ = current_time.toSec();
+      engaged_ = 0;
+    }
   }
 
   automotive_platform_msgs::SpeedMode speed_cmd_msg;

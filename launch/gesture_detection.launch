@@ -7,7 +7,7 @@
   <group ns="$(arg namespace)">
    
     <!-- Add the pose detection node here -->
-    <node pkg="ssc_joystick" type="gesture_detector_nodelet.py" name="gesture_detection_node" output="screen">
+    <node pkg="ssc_joystick" type="gesture_detector_node.py" name="gesture_detection_node" output="screen">
       <!-- Add any required parameters here if necessary -->
     </node>
   </group>
