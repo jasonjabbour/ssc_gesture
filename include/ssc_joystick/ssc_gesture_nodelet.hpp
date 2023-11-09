@@ -96,10 +96,10 @@ private:
   ros::Subscriber gesture_topic_sub_;
 
   // Safety
-  bool training_wheels_mode = false; 
+  bool training_wheels_mode = true; 
 
   // Testing: When you don't have access to pacmod system, webcam, joystick
-  bool testing_mode_ = false;
+  bool testing_mode_ = true;
 
   // Timers
   ros::Timer vehicle_cmd_timer_;
@@ -171,6 +171,10 @@ private:
   int32_t current_gesture_class_ = 0;
   const size_t GESTURE_HISTORY_SIZE = 20; // Example size
   std::deque<int> gesture_history_;
+
+  ros::Time action_start_time_;
+  int current_action_ = 0;
+  const ros::Duration action_duration_ = ros::Duration(3.0); // Duration for an action to be executed
 
 };
 

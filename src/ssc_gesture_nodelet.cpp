@@ -88,6 +88,9 @@ void SscGestureNl::onInit()
   else {
     gesture_topic_sub_ = nh_.subscribe("gesture_topic", 10, &SscGestureNl::gestureClassCallback, this);
   }
+
+  // Initialize the start action time
+  action_start_time_ = ros::Time::now();
   
   // Publishers
   gear_cmd_pub_ = nh_.advertise<automotive_platform_msgs::GearCommand>("gear_select", 1);
@@ -491,8 +494,11 @@ int SscGestureNl::getGestureVote()
 void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::ConstPtr& msg)
 {
 
+  int consensus_classification = 0; 
+
   // Constant Speed
-  const float DEFAULT_SPEED = 3; 
+  const float DEFAULT_SPEED = 3;
+
   // Initialize flags for speed and steering updates
   bool speed_updated = false;
   bool steering_updated = false;
@@ -506,9 +512,25 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
   // Add new classification to history
   gesture_history_.push_back(msg->classification);
 
-  // Use the mode from the last 20 classifications
-  int consensus_classification = getGestureVote();
-  NODELET_INFO("RECEIVED LABEL: %s, CLASSIFICATION: %d, CONSENSUS CLASSIFICATION: %d", msg->label.c_str(), msg->classification, consensus_classification);
+  // Get the current time
+  ros::Time current_time = ros::Time::now();
+
+  // Check if we need to vote for a new action or continue the current action
+  if (current_time - action_start_time_ < action_duration_)
+  {
+    // Continue with the current action
+    // (The logic to maintain the current action goes here)
+    consensus_classification = current_action_;
+  }
+  else
+  {
+    // Time to vote for a new action
+    consensus_classification = getGestureVote();
+
+    current_action_ = consensus_classification;
+    action_start_time_ = current_time;
+
+  }
 
   // FSM based on gesture classification
   switch(consensus_classification)
@@ -555,6 +577,7 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
     default: // For other classifications, no change
       break;
   }
+
 
   // Handle speed updates
   if(speed_updated)
