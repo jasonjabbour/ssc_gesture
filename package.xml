@@ -9,6 +9,7 @@
   <author email="daniel.stanek@hexagon.com">Daniel Stanek</author>
   <author email="sneha.ganesh@hexagon.com">Sneha Ganesh</author>
   <author email="jilin.zhou@autonomoustuff.com">Jilin Zhou</author>
+  <author email="jasonjabbour@g.harvard.edu">Jason Jabbour</author>
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>roslint</build_depend>

@@ -90,7 +90,7 @@ software modules and can be used as a starting point for the development of high
 
 # ssc_gesture
 
-## Commands
+### Setup Commands
 
 ```sh
 
@@ -107,20 +107,43 @@ source devel/setup.bash
 # Install package dependencies
 cd /tmp/photondrive_ws/src/ssc_gesture
 pip3 install -e .
+```
 
-# Launch Gesture Recognition Alone
+### Launch Scripts
+
+```bash
+
+cd /tmp/photondrive_ws
+
+# To Launch Gesture Recognition Alone:
 roslaunch ssc_joystick gesture_detection.launch
 
-# Launch Joystick Alone
+# To Launch Joystick Alone:
 roslaunch ssc_joystick ssc_joystick.launch
 
 # Launch Gesture and SSC Controller
 roslaunch ssc_joystick ssc_gesture.launch
 
-
 ```
 
-## Info
+### Complementary Systems
+
+```bash
+# In the first terminal: 
+roslaunch pacmod pacmod.launch​
+
+# In the second terminal: 
+roslaunch ssc_pm_gem_e4 speed_steering_control.launch​
+```
+
+### Troubleshooting
+
+If you don't see any errors on any of the terminal screens, you should be able to enable using the controller. the controls for using it are available in the README here (NOTE: Make sure you have the E-stop release before you test). Let me know if you have any issues with this and I can help you out. 
+
+Fix Namespace:
+Within the opt/ros/melodic/share/pacmod/launch file add ns="pacmod" to the node pkg="socketcan_bridge" and pkg="pacmod" elements. 
+
+### Info
 
 This repository estimates full body poses using the Python version of MediaPipe. It uses the pose detection model from Mediapipe to identify the 32 landmarks on a full body. The keypoint model is responsible for classifying static poses while the point history and multipoint history classifies left hand motion and full body motion, respectively. 
 

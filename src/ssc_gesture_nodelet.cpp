@@ -538,6 +538,8 @@ void SscGestureNl::createSpeedandSteeringGesture(const ssc_joystick::Gesture::Co
     case 0: // Default: No change
       desired_velocity_ = 0.0;
       speed_updated = true;
+      desired_curvature_ = 0.0; // Decrease curvature to turn left
+      steering_updated = true;
       break;
 
     case 1: // Turn Left

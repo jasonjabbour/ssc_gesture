@@ -6,3 +6,8 @@ bin/
 *~
 .idea/
 cmake-build-debug
+
+# Python compiled files
+__pycache__/
+*.pyc
+*.egg-info/
