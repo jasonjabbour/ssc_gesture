@@ -4,12 +4,17 @@ import csv
 import copy
 import argparse
 import itertools
+import imutils
 from collections import Counter
 from collections import deque
 
+import torch
+import clip
 import cv2 as cv
 import numpy as np
 import mediapipe as mp
+from PIL import Image
+from ultralytics import YOLO 
 
 from gesture_detector.utils import CvFpsCalc
 from gesture_detector.model import KeyPointClassifier
@@ -22,15 +27,21 @@ from ssc_joystick.msg import Gesture
 KEYPOINT_CLASSIFIER_PATH = '/tmp/photondrive_ws/src/ssc_gesture/gesture_detector/model/keypoint_classifier'
 KEYPOINT_HISTORY_CLASSIFIER_PATH = '/tmp/photondrive_ws/src/ssc_gesture/gesture_detector/model/point_history_classifier'
 MULTI_POINT_HISTORY_CLASSIFIER_PATH = '/tmp/photondrive_ws/src/ssc_gesture/gesture_detector/model/multi_point_history_classifier'
+YOLO_POSE_MODEL = 'yolov8n-pose.pt'
 
 class PoseDetection:
     def __init__(self):
+
+        # Pytorch Device
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
         # Model load
         self.mp_drawing = mp.solutions.drawing_utils
         self.mp_drawing_styles = mp.solutions.drawing_styles
         self.mp_pose = mp.solutions.pose 
         self.pose = self.mp_pose.Pose(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+        self.yolov8 = YOLO(YOLO_POSE_MODEL)
+        self.load_clip_model()
 
         self.keypoint_classifier = KeyPointClassifier(model_path=os.path.join(KEYPOINT_CLASSIFIER_PATH, 'keypoint_classifier.tflite'))
         self.point_history_classifier = PointHistoryClassifier(model_path=os.path.join(KEYPOINT_HISTORY_CLASSIFIER_PATH, 'point_history_classifier.tflite'))
@@ -51,10 +62,6 @@ class PoseDetection:
         self.left_wrist_id_history = deque(maxlen=self.history_length)
         self.multi_point_id_history = deque(maxlen=self.history_length)
 
-        self.mode = 0
-
-        self.number = 0
-
         # Create list for consecutive times a label id is repeated
         self.threshold = 20
 
@@ -71,7 +78,13 @@ class PoseDetection:
         self.pose_pub = rospy.Publisher('gesture_topic', Gesture, queue_size=10)
 
         # Example: 0 for webcam, 1 for native computer camera, 'gesture.mov' for imported video
-        self.camera_input = 0
+        # self.camera_input = 0
+        self.camera_input = '/tmp/photondrive_ws/src/ssc_gesture/data/motion_test_1.mov'
+
+        if type(self.camera_input) == str:
+            self.camera_input_type = 'recording'
+        elif type(self.camera_input) == int:
+            self.camera_input_type = 'live'
 
     
     def load_labels(self):
@@ -96,7 +109,11 @@ class PoseDetection:
                 row[0] for row in self.multi_point_history_classifier_labels
             ]
 
-        
+    def load_clip_model(self):
+        # Load the CLIP model
+        self.clip_model, self.clip_preprocess = clip.load("ViT-B/32", device=self.device)
+
+
     # Set video capture input
     def set_video_input(self, camera_input):
         self.camera_input = camera_input
@@ -115,17 +132,21 @@ class PoseDetection:
             self.key = cv.waitKey(10)
             if self.key == 27:  # ESC
                 break
-            if self.key == 97: # a
-                self.user_input = input("Enter new multipoint label:")
-                self.add_multipoint_label(self.user_input)
-            self.number, self.mode = self.select_mode(self.key, self.mode)
-
 
             # Camera capture 
             ret, self.image = self.cap.read()
             if not ret:
                 break
-            self.image = cv.flip(self.image, 1)  # Mirror display
+
+            # Rescale recording since too slow
+            if self.camera_input_type == 'recording':
+                # Set the desired width for the scaled image
+                new_width = 720 
+
+                # Resize the image while maintaining aspect ratio
+                self.image = imutils.resize(self.image, width=new_width)
+
+            # self.image = cv.flip(self.image, 1)  # Mirror display
             self.debug_image = copy.deepcopy(self.image)
 
             # Detection implementation 
@@ -137,12 +158,100 @@ class PoseDetection:
 
             self.image = cv.cvtColor(self.image, cv.COLOR_RGB2BGR)
 
+            # Use YoloV8 Pose Estimation
+            yolo_pose_landmarks = self.yolov8(self.image, verbose=False)
+
+            for result in yolo_pose_landmarks:
+                boxes = result.boxes.xyxy  # Bounding box coordinates
+                keypoints = result.keypoints.xy  # Keypoint coordinates
+                class_ids = result.boxes.cls  # Class IDs for each detection
+
+                # Prepare text description for CLIP
+                # TODO: Subscribe to a topic with str input
+                text_descriptions = ["a person in a yellow traffic vest", 
+                                    "police officer", 
+                                    "construction worker", 
+                                    "healthcare worker", 
+                                    "man dressed in a green shirt", 
+                                    "dog", 
+                                    "cat"]
+                print("*"*20)
+                for text_description in text_descriptions:
+
+                    text_tokens = clip.tokenize([text_description]).to(self.device)
+
+                    for idx, (box, class_id) in enumerate(zip(boxes, class_ids)):
+                        if class_id == 0:  # Check if the class is 'person'
+                            xmin, ymin, xmax, ymax = box
+
+                            # Draw bounding box
+                            cv.rectangle(self.image, (int(xmin), int(ymin)), (int(xmax), int(ymax)), color=(0, 255, 0), thickness=2)
+                            
+                            # Draw label
+                            label = "person"  # Assuming 'person' is the label for class_id 0
+                            cv.putText(self.image, label, (int(xmin), int(ymin - 10)), cv.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                            # Draw keypoints for this person
+                            for kp in keypoints:
+                                for point in kp:
+                                    x, y = point
+                                    if xmin <= x <= xmax and ymin <= y <= ymax:  # Check if keypoint is inside the bounding box
+                                        cv.circle(self.image, (int(x), int(y)), radius=5, color=(255, 0, 0), thickness=-1)
+
+                            # Extract the region of interest (ROI) from the image based on the bounding box
+                            person_roi = self.image[int(ymin):int(ymax), int(xmin):int(xmax)]
+
+                            # Visualize the extracted ROI
+                            cv.imshow(f"Person {idx} ROI", person_roi)
+
+                            # Convert the NumPy array (OpenCV image) to a PIL Image
+                            person_roi_pil = Image.fromarray(cv.cvtColor(person_roi, cv.COLOR_BGR2RGB))
+
+                            # Preprocess the ROI and convert to a tensor
+                            roi_tensor = self.clip_preprocess(person_roi_pil).unsqueeze(0).to(self.device)
+
+                            # Calculate features with CLIP
+                            with torch.no_grad():
+                                image_features = self.clip_model.encode_image(roi_tensor)
+                                text_features = self.clip_model.encode_text(text_tokens)
+
+                                # Compute similarity 
+                                logits_per_image = (image_features @ text_features.T).softmax(dim=-1)
+                                probs = logits_per_image.cpu().numpy()
+
+                                print(f"{text_description} proba: {probs}")
+
+
             # Draw the pose annotation on the image.
-            self.mp_drawing.draw_landmarks(
-                self.image,
-                results.pose_landmarks,
-                self.mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec = self.mp_drawing_styles.get_default_pose_landmarks_style())   
+            # self.mp_drawing.draw_landmarks(
+            #     self.image,
+            #     results.pose_landmarks,
+            #     self.mp_pose.POSE_CONNECTIONS,
+            #     landmark_drawing_spec = self.mp_drawing_styles.get_default_pose_landmarks_style())   
+
+
+            # image_path = '/path/to/your/image.png'
+            # image = Image.open(image_path)
+
+            # # Preprocess the image and convert to a tensor
+            # image_tensor = preprocess(image).unsqueeze(0).to(device)
+
+            # # Prepare the text
+            # text_descriptions = ["a person in a yellow traffic vest"]
+            # text_tokens = clip.tokenize(text_descriptions).to(device)
+
+            # # Calculate features
+            # with torch.no_grad():
+            #     image_features = model.encode_image(image_tensor)
+            #     text_features = model.encode_text(text_tokens)
+
+            #     # Compute similarities between image and text features
+            #     # (For multiple regions, you would repeat the image feature extraction for each ROI)
+            #     logits_per_image, logits_per_text = model(image_tensor, text_tokens)
+            #     probs = logits_per_image.softmax(dim=-1).cpu().numpy()
+
+            # print(f"Probabilities: {probs}")
+
 
             # Create variable for previous multipoint id
             if not self.most_common_multi_id:
@@ -242,7 +351,7 @@ class PoseDetection:
                 multi_default_coordinates = [default_coordinates] * self.landmark_count
                 self.multi_point_history.append(multi_default_coordinates)
 
-            self.image = self.draw_info(self.image, self.fps, self.mode, self.number)
+            self.image = self.draw_info(self.image, self.fps)
 
             # Screen reflection 
             cv.imshow('MediaPipe Pose', self.image)
@@ -390,36 +499,14 @@ class PoseDetection:
 
 
     # Adds logging information to video
-    def draw_info(self, image, fps, mode, number):
+    def draw_info(self, image, fps):
         cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
                 1.0, (0, 0, 0), 4, cv.LINE_AA)
         cv.putText(image, "FPS:" + str(fps), (10, 30), cv.FONT_HERSHEY_SIMPLEX,
                 1.0, (255, 255, 255), 2, cv.LINE_AA)
 
-        mode_string = ['Logging Key Point', 'Logging Point History', 'Logging Multi Point History']
-        if 1 <= mode <= 3:
-            cv.putText(image, "MODE:" + mode_string[mode - 1], (10, image.shape[0] - 50),
-                    cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
-                    cv.LINE_AA)
-            if 0 <= number <= 9:
-                cv.putText(image, "NUM:" + str(number), (10, image.shape[0] - 100),
-                        cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1,
-                        cv.LINE_AA)
         return image
 
-    def select_mode(self, key, mode):
-        number = -1
-        if 48 <= key <= 57:  # 0 ~ 9
-            number = key - 48
-        if key == 110:  # n
-            mode = 0
-        if key == 107:  # k
-            mode = 1
-        if key == 104:  # h
-            mode = 2
-        if key == 98:  # b
-            mode = 3
-        return number, mode
 
 
 if __name__ == '__main__':

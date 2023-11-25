@@ -40,9 +40,18 @@
 	"runArgs": [
 		"--privileged",
 		// "-e", "DISPLAY=host.docker.internal:0",
-		"-e", "DISPLAY=:1",
+		// "-e", "DISPLAY=host.docker.internal:10.0",
+		// "-e", "DISPLAY=host.docker.internal:11.0",
+		// "-e", "DISPLAY=host.docker.internal:12.0",
+		"-e", "DISPLAY=localhost:10.0",
+		// "-e", "DISPLAY=10.243.41.233:11.0",
+		// "-e", "DISPLAY=:1",
+		// "-e", "DISPLAY=localhost:10.0",
+		// "-e", "DISPLAY=:0",
 		"-v", "/tmp/.X11-unix:/tmp/.X11-unix", 
-		"--device=/dev/input/js0", 
+		"-v", "${env:HOME}/.Xauthority:/root/.Xauthority", //ASSUMING the .Xauthority file is FOUND IN YOUR HOME DIR
+		"-e", "XAUTHORITY=/root/.Xauthority",
+		// "--device=/dev/input/js0", 
 		"--network=host"
 	]
 }

@@ -70,7 +70,23 @@ RUN apt-get install -y python3-pip && \
     pip3 install mediapipe && \
     pip3 install tensorflow && \
     pip3 install PyYAML && \ 
-    pip3 install rospkg
+    pip3 install rospkg && \
+    pip3 install imutils && \
+    pip3 install ultralytics && \
+    pip3 install ftfy && \
+    pip3 install regex && \
+    pip3 install tqdm
+
+# Install PyTorch compatible with CUDA 11.5
+# MIGHT NEED TO CHANGE CUDA VERSION DEPENDING ON YOUR GPU
+# YOU CAN FIND OUT BY RUNNING ON THE HOST MACHINE: nvcc --version
+RUN pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu115
+
+# Install CLIP from the GitHub repository
+RUN pip3 install git+https://github.com/openai/CLIP.git
+
+RUN apt-get install -y \
+    x11-apps
 
 # Source ROS setup.bash in the bashrc file for the user
 RUN echo "source /opt/ros/melodic/setup.bash" >> /root/.bashrc
