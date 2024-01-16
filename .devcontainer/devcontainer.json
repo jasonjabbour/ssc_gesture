@@ -2,6 +2,11 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.241.1/containers/python-3
 {
 	"name": "photondrive_devenv",
+
+	// Env variable to specify where llava model is saved from Hugging Face
+	"containerEnv": {
+        "TRANSFORMERS_CACHE": "/tmp/photondrive_ws/src/llava_model"
+    },
 	
 	"build": {
 		"dockerfile": "Dockerfile",
@@ -18,6 +23,7 @@
 	
 	"mounts": [
 		"source=${localWorkspaceFolder},target=/tmp/photondrive_ws/src/ssc_gesture,type=bind,consistency=cached",
+		"source=${localWorkspaceFolder}/../llava_model,target=/tmp/photondrive_ws/src/llava_model,type=bind,consistency=cached",
 	],
 	// "workspaceMount": "source=${localWorkspaceFolder},target=/tmp/benchmark_ws/src/benchmarks,type=bind,consistency=cached", 
 	"workspaceFolder": "/tmp/photondrive_ws/",
@@ -39,6 +45,7 @@
 
 	"runArgs": [
 		"--privileged",
+		"--gpus", "all",
 		// "-e", "DISPLAY=host.docker.internal:0",
 		// "-e", "DISPLAY=host.docker.internal:10.0",
 		// "-e", "DISPLAY=host.docker.internal:11.0",
