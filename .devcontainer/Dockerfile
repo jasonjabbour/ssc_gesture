@@ -24,7 +24,9 @@ RUN apt-get update && apt-get install -y \
     libxmlsec1-dev \
     libffi-dev \
     liblzma-dev \
-    libxkbcommon-x11-0
+    libxkbcommon-x11-0 \
+    xclip \
+    xsel
 
 # Add ROS repository key
 RUN curl -sSL http://packages.ros.org/ros.key | apt-key add -
@@ -62,6 +64,7 @@ RUN wget https://www.python.org/ftp/python/3.10.0/Python-3.10.0.tgz && \
     make install
 
 # Install Python 3 pip and required packages
+# For VIP LLaVA you must use this instead of: transformers==4.36.0
 RUN apt-get install -y python3-pip && \
     pip3 install --upgrade setuptools pip && \
     pip3 install --upgrade pip && \
@@ -75,7 +78,11 @@ RUN apt-get install -y python3-pip && \
     pip3 install ultralytics && \
     pip3 install ftfy && \
     pip3 install regex && \
-    pip3 install tqdm
+    pip3 install tqdm && \
+    pip3 install git+https://github.com/huggingface/transformers.git && \
+    pip3 install bitsandbytes==0.41.3 && \
+    pip3 install accelerate==0.25.0 && \
+    pip3 install kivy[full]
 
 # Install PyTorch compatible with CUDA 11.5
 # MIGHT NEED TO CHANGE CUDA VERSION DEPENDING ON YOUR GPU

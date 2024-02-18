@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="namespace" default="ssc" />
+
+  <remap from="/diagnostics" to="/$(arg namespace)/diagnostics" />
+
+  <group ns="$(arg namespace)">
+   
+    <node pkg="ssc_joystick" type="passenger_dashboard.py" name="passenger_dashboard_node" output="screen">
+    </node> 
+
+  </group>
+</launch>

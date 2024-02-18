@@ -8,10 +8,7 @@ setup(
         'scikit-build',
         'opencv-python',
         'mediapipe',
-        'tensorflow', 
-        'transformers', 
-        'bitsandbytes',
-        'accelerate'        
+        'tensorflow',     
     ],
 )
 
